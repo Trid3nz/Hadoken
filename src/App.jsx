@@ -1,110 +1,11 @@
 import React from "react";
 import "./App.css";
-
-const INPUT_DISPLAY_MAP = {
-  ArrowUp: "↑",
-  ArrowDown: "↓",
-  ArrowLeft: "←",
-  ArrowRight: "→",
-  Space: "␣",
-};
-
-const COMBOS = [
-  {
-    id: 1,
-    name: "Hadoken",
-    sequence: ["ArrowRight", "ArrowRight", "ArrowRight", "Space"],
-  },
-  {
-    id: 2,
-    name: "Shoryuken",
-    sequence: ["ArrowUp", "ArrowRight", "ArrowUp", "ArrowRight", "Space"],
-  },
-  {
-    id: 3,
-    name: "Tatsumaki",
-    sequence: ["ArrowLeft", "ArrowLeft", "ArrowRight", "Arrowleft", "Space"],
-  },
-  {
-    id: 4,
-    name: "Dragon Punch",
-    sequence: ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowRight", "Space"],
-  },
-  {
-    id: 5,
-    name: "Hurricane Kick",
-    sequence: ["ArrowRight", "ArrowDown", "ArrowRight", "ArrowRight", "Space"],
-  },
-  {
-    id: 6,
-    name: "Giga Hadoken",
-    sequence: [
-      "ArrowRight",
-      "ArrowRight",
-      "ArrowRight",
-      "ArrowDown",
-      "ArrowUp",
-      "ArrowRight",
-      "Space",
-    ],
-  },
-  {
-    id: 7,
-    name: "Ultra Shoryuken",
-    sequence: ["ArrowUp", "ArrowRight", "ArrowUp", "ArrowRight", "Space"],
-  },
-  {
-    id: 8,
-    name: "Mega Tatsumaki",
-    sequence: ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowRight", "Space"],
-  },
-  {
-    id: 9,
-    name: "Final Dragon Punch",
-    sequence: [
-      "ArrowLeft",
-      "ArrowRight",
-      "ArrowRight",
-      "ArrowDown",
-      "ArrowRight",
-      "Space",
-    ],
-  },
-  {
-    id: 10,
-    name: "Ultimate Hurricane Kick",
-    sequence: [
-      "ArrowRight",
-      "ArrowDown",
-      "ArrowUp",
-      "ArrowLeft",
-      "ArrowRight",
-      "ArrowRight",
-      "Space",
-    ],
-  },
-];
-
-const MAX_INPUT_DELAY_MS = 1000;
-const MAX_LOG_ITEMS = 12;
-
-function matchCombos(currentSequence) {
-  for (let i = COMBOS.length - 1; i >= 0; i -= 1) {
-    const combo = COMBOS[i];
-    const neededLength = combo.sequence.length;
-    if (currentSequence.length < neededLength) continue;
-
-    const recentSlice = currentSequence.slice(-neededLength);
-    const matches = recentSlice.every(
-      (entry, idx) => entry.key === combo.sequence[idx]
-    );
-    if (matches) {
-      return combo;
-    }
-  }
-
-  return null;
-}
+import {
+  INPUT_DISPLAY_MAP,
+  COMBOS,
+  MAX_INPUT_DELAY_MS,
+  ComboEngine,
+} from "./comboEngine";
 
 function App() {
   const [log, setLog] = React.useState([]);
@@ -113,70 +14,68 @@ function App() {
     "Press arrow keys and Space to start."
   );
   const [charged, setCharged] = React.useState(false);
-  const spaceDownRef = React.useRef(null);
-  const lastInputTimeRef = React.useRef(null);
+  const engineRef = React.useRef(null);
 
   React.useEffect(() => {
+    engineRef.current = new ComboEngine();
+
     function handleKeyDown(event) {
+      if (event.repeat) return;
+
       const { key } = event;
-      const validKeys = [
-        "ArrowUp",
-        "ArrowDown",
-        "ArrowLeft",
-        "ArrowRight",
-        " ",
-      ];
-
-      if (!validKeys.includes(key)) return;
       event.preventDefault();
-
-      const now = Date.now();
-      const normalizedKey = key === " " ? "Space" : key;
-
-      if (normalizedKey === "Space" && spaceDownRef.current == null) {
-        spaceDownRef.current = now;
-      }
-
-      const lastTime = lastInputTimeRef.current;
-      const isTooSlow =
-        typeof lastTime === "number" && now - lastTime > MAX_INPUT_DELAY_MS;
-
-      lastInputTimeRef.current = now;
 
       setMessage("...");
       setCharged(false);
 
-      setLog((prev) => {
-        const base = isTooSlow ? [] : prev;
-        const next = [...base, { key: normalizedKey, time: now }];
-        const trimmed = next.slice(-MAX_LOG_ITEMS);
-        const combo = matchCombos(trimmed);
+      const engine = engineRef.current;
+      if (!engine) return;
 
-        if (combo) {
-          setLastCombo(combo.name);
-          setMessage(`Combo detected: ${combo.name}!`);
-        } else {
-          setLastCombo(null);
-          setMessage("No combo yet. Keep going!");
-        }
+      const result = engine.handleKeyDown(key);
+      if (!result) return;
 
-        return trimmed;
-      });
+      const {
+        log: newLog,
+        combo,
+        charged: isCharged,
+        message: newMessage,
+      } = result;
+
+      if (Array.isArray(newLog)) {
+        setLog(newLog);
+      }
+
+      if (combo) {
+        setLastCombo(combo.name);
+      } else {
+        setLastCombo(null);
+      }
+
+      if (typeof newMessage === "string") {
+        setMessage(newMessage);
+      }
+
+      if (typeof isCharged === "boolean") {
+        setCharged(isCharged);
+      }
     }
 
     function handleKeyUp(event) {
       const { key } = event;
-      if (key !== " ") return;
+      const engine = engineRef.current;
+      if (!engine) return;
 
-      const now = Date.now();
-      if (spaceDownRef.current != null) {
-        const held = now - spaceDownRef.current;
-        spaceDownRef.current = null;
+      const result = engine.handleKeyUp(key);
+      if (!result) return;
 
-        if (held >= 2000 && held <= 3000) {
-          setCharged(true);
-          setMessage("Charged Space! Your next combo is powered up.");
-        }
+      const { charged: isCharged, message: newMessage } = result;
+
+      if (typeof isCharged === "boolean") {
+        setCharged(isCharged);
+      }
+
+      if (typeof newMessage === "string" && newMessage) {
+        setMessage(newMessage);
       }
     }
 
@@ -190,64 +89,93 @@ function App() {
   }, []);
 
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <h1 className="app-title">Hadoken Lab</h1>
-        <p className="app-subtitle">
+    <div className="app-root max-w-3xl mx-auto px-4 py-10">
+      <header className="app-header text-center mb-8">
+        <h1 className="app-title font-press text-xl tracking-[0.25em] uppercase mb-3">
+          Hadoken Lab
+        </h1>
+        <p className="app-subtitle text-sm text-slate-200">
           Practice classic fighting-game combos using your keyboard.
         </p>
-        <p className="app-hint">
+        <p className="app-hint mt-2 text-xs text-violet-100">
           Use the arrow keys and space bar. Each input must be within{" "}
-          <span className="hint-highlight">1 second</span> of the previous one.
-          Hold space for <span className="hint-highlight">2–3 seconds</span> for
+          <span className="hint-highlight font-semibold text-amber-300">
+            1 second
+          </span>{" "}
+          of the previous one. Hold space for{" "}
+          <span className="hint-highlight font-semibold text-amber-300">
+            2–3 seconds
+          </span>{" "}
           a charged effect.
         </p>
       </header>
 
-      <main className="layout">
-        <section className="panel highlight-panel">
-          <h2 className="panel-title">Current Combo</h2>
+      <main className="layout grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:grid-rows-[auto_auto]">
+        <section className="panel highlight-panel md:col-span-2 bg-gradient-to-br from-violet-900/80 to-slate-950/80 rounded-xl border border-violet-200/20 p-4 shadow-2xl">
+          <h2 className="panel-title text-[0.7rem] uppercase tracking-[0.25em] text-violet-100/90 mb-3">
+            Current Combo
+          </h2>
           <div className={`combo-display ${charged ? "combo-charged" : ""}`}>
             <span className="combo-name">
               {lastCombo ?? "No combo detected yet"}
             </span>
           </div>
-          <p className="status-message">{message}</p>
+          <p className="status-message mt-2 text-xs text-violet-100/90">
+            {message}
+          </p>
         </section>
 
-        <section className="panel">
-          <h2 className="panel-title">Input Stream</h2>
-          <div className="input-log">
+        <section className="panel bg-slate-950/70 rounded-xl border border-violet-200/20 p-4 shadow-xl">
+          <h2 className="panel-title text-[0.7rem] uppercase tracking-[0.25em] text-violet-100/90 mb-3">
+            Input Stream
+          </h2>
+          <div className="input-log flex flex-wrap gap-1.5 min-h-[2.5rem]">
             {log.length === 0 && (
-              <p className="muted">Waiting for your first input…</p>
+              <p className="muted text-xs text-slate-300/80">
+                Waiting for your first input…
+              </p>
             )}
             {log.map((entry, idx) => (
-              <div className="input-pill" key={`${entry.time}-${idx}`}>
-                <span className="pill-icon">
+              <div
+                className="input-pill inline-flex items-center gap-1 rounded-full border border-slate-600/60 bg-slate-900/80 px-2 py-1 text-[0.7rem]"
+                key={`${entry.time}-${idx}`}
+              >
+                <span className="pill-icon text-sm">
                   {INPUT_DISPLAY_MAP[entry.key] ?? entry.key}
                 </span>
-                <span className="pill-label">{entry.key}</span>
+                <span className="pill-label opacity-80">{entry.key}</span>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="panel">
-          <h2 className="panel-title">Combo List</h2>
-          <div className="combo-table-wrapper">
-            <table className="combo-table">
+        <section className="panel bg-slate-950/70 rounded-xl border border-violet-200/20 p-4 shadow-xl">
+          <h2 className="panel-title text-[0.7rem] uppercase tracking-[0.25em] text-violet-100/90 mb-3">
+            Combo List
+          </h2>
+          <div className="combo-table-wrapper rounded-lg overflow-hidden border border-violet-300/30">
+            <table className="combo-table w-full border-collapse text-xs">
               <thead>
                 <tr>
-                  <th>No</th>
-                  <th>Input</th>
-                  <th>Combo</th>
+                  <th className="px-2 py-2 text-left font-semibold tracking-[0.15em] uppercase text-[0.65rem] bg-violet-900/80">
+                    No
+                  </th>
+                  <th className="px-2 py-2 text-left font-semibold tracking-[0.15em] uppercase text-[0.65rem] bg-violet-900/80">
+                    Input
+                  </th>
+                  <th className="px-2 py-2 text-left font-semibold tracking-[0.15em] uppercase text-[0.65rem] bg-violet-900/80">
+                    Combo
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {COMBOS.map((combo) => (
-                  <tr key={combo.id}>
-                    <td>{combo.id}</td>
-                    <td className="combo-sequence">
+                  <tr
+                    key={combo.id}
+                    className="odd:bg-slate-950/90 even:bg-slate-900/80 hover:bg-violet-800/80"
+                  >
+                    <td className="px-2 py-1 align-middle">{combo.id}</td>
+                    <td className="combo-sequence px-2 py-1 whitespace-nowrap">
                       {combo.sequence.map((step, index) => (
                         <span
                           key={index}
@@ -259,7 +187,7 @@ function App() {
                         </span>
                       ))}
                     </td>
-                    <td>{combo.name}</td>
+                    <td className="px-2 py-1 align-middle">{combo.name}</td>
                   </tr>
                 ))}
               </tbody>
@@ -268,7 +196,7 @@ function App() {
         </section>
       </main>
 
-      <footer className="app-footer">
+      <footer className="app-footer mt-4 text-center text-[0.7rem] text-slate-300/80">
         <span>Built for combo timing practice.</span>
       </footer>
     </div>
