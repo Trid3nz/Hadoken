@@ -23,7 +23,12 @@ function App() {
       if (event.repeat) return;
 
       const { key } = event;
-      event.preventDefault();
+      
+      // Prevent default behavior for game keys to stop page scrolling
+      const gameKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
+      if (gameKeys.includes(key)) {
+        event.preventDefault();
+      }
 
       setMessage("...");
       setCharged(false);
@@ -62,6 +67,13 @@ function App() {
 
     function handleKeyUp(event) {
       const { key } = event;
+      
+      // Prevent default behavior for game keys to stop page scrolling
+      const gameKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
+      if (gameKeys.includes(key)) {
+        event.preventDefault();
+      }
+
       const engine = engineRef.current;
       if (!engine) return;
 
@@ -92,10 +104,10 @@ function App() {
     <div className="app-root max-w-3xl mx-auto px-4 py-10">
       <header className="app-header text-center mb-8">
         <h1 className="app-title font-press text-xl tracking-[0.25em] uppercase mb-3">
-          Hadoken Lab
+          Fighting Game Combo WKWKWK
         </h1>
         <p className="app-subtitle text-sm text-slate-200">
-          Practice classic fighting-game combos using your keyboard.
+          Tes Kombo di keyboard lu bjir
         </p>
         <p className="app-hint mt-2 text-xs text-violet-100">
           Use the arrow keys and space bar. Each input must be within{" "}
